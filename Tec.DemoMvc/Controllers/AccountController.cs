@@ -5,8 +5,14 @@ using System.Transactions;
 using System.Web;
 using System.Web.Mvc;
 using System.Web.Security;
+using System.Xml;
 using DotNetOpenAuth.AspNet;
+using KayakoRestApi;
+using KayakoRestApi.Core.Departments;
+using KayakoRestApi.Core.Test;
+using KayakoRestApi.Core.Users;
 using Microsoft.Web.WebPages.OAuth;
+using Tec.DemoMvc.Helpers;
 using WebMatrix.WebData;
 using Tec.DemoMvc.Filters;
 using Tec.DemoMvc.Models;
@@ -14,7 +20,7 @@ using Tec.DemoMvc.Models;
 namespace Tec.DemoMvc.Controllers
 {
     [Authorize]
-    [InitializeSimpleMembership]
+ 
     public class AccountController : Controller
     {
         //
@@ -35,14 +41,60 @@ namespace Tec.DemoMvc.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult Login(LoginModel model, string returnUrl)
         {
-            if (ModelState.IsValid && WebSecurity.Login(model.UserName, model.Password, persistCookie: model.RememberMe))
+
+            //var httpHelper = new HttpHelper();
+            //var username="michael_zhao";
+            //var password = "mz#Tec5323";
+            
+            if (ModelState.IsValid && Validate(model.UserName, model.Password, model.RememberMe))
             {
-                return RedirectToLocal(returnUrl);
+                if (model.RememberMe)
+                {
+                    var userAuthTicket = new FormsAuthenticationTicket(1, model.UserName, DateTime.Now,
+                                                                       DateTime.MaxValue, true, model.Password,
+                                                                       FormsAuthentication.FormsCookiePath);
+                    var encUserAuthTicket = FormsAuthentication.Encrypt(userAuthTicket);
+                    var userAuthCookie = new HttpCookie(FormsAuthentication.FormsCookieName, encUserAuthTicket);
+                    if (userAuthTicket.IsPersistent) userAuthCookie.Expires = userAuthTicket.Expiration;
+                    Response.Cookies.Add(userAuthCookie);
+                }
+                else
+                {
+                    FormsAuthentication.SetAuthCookie(model.UserName, false);
+                }
+
+                if (Url.IsLocalUrl(returnUrl) && returnUrl.Length > 1 && returnUrl.StartsWith("/")
+                && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\"))
+                {
+                    return RedirectToLocal(returnUrl);
+                }
+                else
+                {
+                    return RedirectToAction("Index", "Home");
+                }
             }
 
             // If we got this far, something failed, redisplay form
             ModelState.AddModelError("", "The user name or password provided is incorrect.");
             return View(model);
+        }
+
+        private bool Validate(string username, string password, bool rememberMe)
+        {
+            const string url = "http://integrate.v-teck.net:81/AppLDAPi.php";
+            try
+            {
+                var result = HttpHelper.HttpPost(url, String.Format("username={0}&password={1}", username, password));
+
+                return result.IndexOf("<result>1</result>", System.StringComparison.Ordinal) !=-1;
+
+            }
+            catch (Exception exception)
+            {
+                throw exception;
+            }
+
+
         }
 
         //
